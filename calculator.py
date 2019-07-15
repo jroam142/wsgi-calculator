@@ -1,3 +1,6 @@
+import traceback
+from functools import reduce
+
 """
 For your homework this week, you'll be creating a wsgi application of
 your own.
@@ -41,19 +44,65 @@ To submit your homework:
 
 """
 
+def home():
+    body = """<div style="width=100%; display: flex; flex-direction: column;
+                          align-items: center;">
+              <h1>WSGI Calculator</h1>
+              <p style="max-width:400px; text-align: center;">To use this calculator your arguments will be entered in the
+              address bar in the following fashion: add/4/5/6</p>
+              <p>The operations available are:</p>
+              <ul style="padding: 0">
+                <li>add</li>
+                <li>subtract</li>
+                <li>multiply</li>
+                <li>divide</li>
+              </ul>
+              </div>"""
+
+    return body
+
 
 def add(*args):
     """ Returns a STRING with the sum of the arguments """
 
     # TODO: Fill sum with the correct value, based on the
     # args provided.
-    sum = "0"
+    # sum = "0"
+    if args:
+        return str(round(sum(map(float, args)), 4))
+    else:
+        return "Please provide numbers to add"
 
-    return sum
 
-# TODO: Add functions for handling more arithmetic operations.
+def multiply(*args):
+    """ Returns a string with the product of the arguments """
+    if args:
+        return str(round(reduce((lambda x, y: float(x) * float(y)), args), 4))
+    else:
+        return "Please provide numbers to multiply"
 
-def resolve_path(path):
+
+def subtract(*args):
+    if args:
+        return str(round(reduce((lambda x, y: float(x) - float(y)), args), 4))
+    else:
+        return "Please provide numbers to subtract."
+
+
+def divide(*args):
+    if args:
+        try:
+            body = str(round(reduce((lambda x, y: float(x) / float(y)), args), 4))
+        except ZeroDivisionError:
+            body = "Cannot divide by zero."
+
+        return body
+    else:
+        return "Please provide numbers to divide."
+
+
+
+def resolve_path(path):# {{{
     """
     Should return two values: a callable and an iterable of
     arguments.
@@ -63,12 +112,30 @@ def resolve_path(path):
     # examples provide the correct *syntax*, but you should
     # determine the actual values of func and args using the
     # path.
-    func = add
-    args = ['25', '32']
+    # func = add
+    # args = ['25', '32']
 
-    return func, args
+    funcs = {
+            "": home,
+            "add": add,
+            "multiply": multiply,
+            "subtract": subtract,
+            "divide": divide
+            }
 
-def application(environ, start_response):
+    path = path.strip('/').split('/')
+    func_name = path[0]
+    args = path[1:]
+
+    try:
+        func = funcs[func_name]
+    except KeyError:
+        raise NameError
+
+    return func, args# }}}
+
+
+def application(environ, start_response):# {{{
     # TODO: Your application code from the book database
     # work here as well! Remember that your application must
     # invoke start_response(status, headers) and also return
@@ -76,9 +143,32 @@ def application(environ, start_response):
     #
     # TODO (bonus): Add error handling for a user attempting
     # to divide by zero.
-    pass
+    headers = [('Content-type', 'text/html')]
+
+    try:
+        path = environ.get('PATH_INFO', None)
+        if path is None:
+            raise NameError
+        func, args = resolve_path(path)
+        body = func(*args)
+        status = "200 OK"
+    except NameError:
+        status = "404 Not Found"
+        body = "<h2>Not Found</h2>"
+    except Exception:
+        status = "500 Internal Server Error"
+        body = "<h1>Internal Server Error</h1>"
+        print(traceback.format_exc())
+    finally:
+        headers.append(('content-length', str(len(body))))
+        start_response(status, headers)
+        return [body.encode('utf8')] # }}}
+
 
 if __name__ == '__main__':
     # TODO: Insert the same boilerplate wsgiref simple
     # server creation that you used in the book database.
-    pass
+    from wsgiref.simple_server import make_server
+    srv = make_server('localhost', 8080, application)
+    srv.serve_forever()
+
